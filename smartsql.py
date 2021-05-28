@@ -9,9 +9,13 @@
 
 import copy
 
-
 __all__ = ["QS", "T", "F", "E"]
 
+
+def apply_v3(fuc, params=[]):
+    return fuc(*params)
+
+apply = apply_v3
 
 class Error(Exception):
     pass
@@ -101,17 +105,16 @@ class TableSet(object):
             params.extend(sql_obj.params)
         return params
 
-    #public func
+    # public func
     def on(self, c):
         self._join_list[-1]._on = c
         return self
 
-    #private func
+    # private func
     def _add_join(self, join_type, obj):
         obj._join = join_type
         self._join_list.append(obj)
         return self
-
 
 
 ##################################################################
@@ -379,6 +382,7 @@ class ConditionSet(object):
     def params(self):
         return [] if self._empty else self._params
 
+
 ################################################
 
 
@@ -405,16 +409,19 @@ def opt_checker(k_list):
 
         new_func.__doc__ = func.__doc__
         return new_func
+
     return new_deco
 
 
 def _gen_order_by_list(f_list, direct="ASC"):
-        return ", ".join(["%s %s" % ((f.sql if isinstance(f, Field) else f), direct) for f in f_list])
+    return ", ".join(["%s %s" % ((f.sql if isinstance(f, Field) else f), direct) for f in f_list])
+
 
 def _gen_f_list(f_list, default=None):
     if len(f_list) < 1 and default is not None:
         return default
     return ", ".join([(f.sql if isinstance(f, Field) else f) for f in f_list])
+
 
 def _gen_v_list(v_list, params):
     values = []
@@ -423,8 +430,10 @@ def _gen_v_list(v_list, params):
         params.append(v)
     return "(%s)" % (", ".join(values),)
 
+
 def _gen_v_list_set(v_list_set, params):
     return ", ".join([_gen_v_list(v_list, params) for v_list in v_list_set])
+
 
 def _gen_fv_dict(fv_dict, params):
     sql = []
@@ -443,6 +452,7 @@ class QuerySetDeepcopyHelper(object):
     """
         used to avoid deep copy the db
     """
+
     def __init__(self, db):
         self._db = db
 
@@ -787,96 +797,97 @@ class UnionQuerySet(object):
         return sql, params
 
 
-
-
 ############## alias ###############
 
 QS, T, F, E = QuerySet, Table, Field, Expr
 
 if __name__ == "__main__":
-    print
-    print "*******************************************"
-    print "************   Single Query   *************"
-    print "*******************************************"
-    print QS((T.base + T.grade).on((F.base__type == F.grade__item_type) & (F.base__type == 1)) + T.lottery).on(
-        F.base__type == F.lottery__item_type
-    ).where(
-        (F.name == "name") & (F.status == 0) | (F.name == None)
-    ).group_by("base.type").having(F("count(*)") > 1).select(F.type, F.grade__grade, F.lottery__grade)
+    print()
+    print("*******************************************")
+    print("************   Single Query   *************")
+    print("*******************************************")
+    # sql = QS((T.base + T.grade).on((F.base__type == F.grade__item_type) & (F.base__type == 1)) + T.lottery).on(
+    #     F.base__type == F.lottery__item_type
+    # ).where(
+    #     (F.name == "name") & (F.status == 0) | (F.name == None)
+    # ).group_by("base.type").having(F("count(*)") > 1).select(F.type, F.grade__grade, F.lottery__grade)
 
+    sql = QS(T('base') + T('grade')).on((F('base__type') == F('grade__item_type'))).select()
 
-    print
-    print "*******************************************"
-    print "**********  Step by Step Query   **********"
-    print "*******************************************"
-    t = T.grade
-    print QS(t).limit(0,100).select(F.name)
-    print "==========================================="
+    print(sql)
 
-    t = (t * T.base).on(F.grade__item_type == F.base__type)
-    print QS(t).order_by(F.grade__name, F.base__name, desc=True).select(F.grade__name, F.base__img)
-    print "==========================================="
-
-    t = (t + T.lottery).on(F.base__type == F.lottery__item_type)
-    print QS(t).group_by(F.grade__grade).having(F.grade__grade > 0).select(F.grade__name, F.base__img, F.lottery__price)
-    print "==========================================="
-
-    w = (F.base__type == 1)
-    print QS(t).where(w).select(F.grade__name, for_update=True)
-    print "==========================================="
-
-    w = w & (F.grade__status == [0,1])
-    print QS(t).where(w).group_by(F.grade__name, F.base__img).count()
-    print "==========================================="
-
-    from datetime import datetime
-    w = w | (F.lottery__add_time > "2009-01-01") & (F.lottery__add_time <= datetime.now())
-    print QS(t).where(w).select_one(F.grade__name, F.base__img, F.lottery__price)
-    print "==========================================="
-
-    w = w & (F.base__status != [1, 2])
-    print QS(t).where(w).select(F.grade__name, F.base__img, F.lottery__price, "CASE 1 WHEN 1")
-
-
-    print
-    print "*******************************************"
-    print "**********  Step by Step Query2  **********"
-    print "*******************************************"
-    qs = QS(T.user)
-    print qs.select(F.name)
-    print "==========================================="
-    qs.tables = (qs.tables * T.address).on(F.user__id == F.address__user_id)
-    print qs.select(F.user__name, F.address__street)
-    print "==========================================="
-    qs.wheres = qs.wheres & (F.id == 1)
-    print qs.select(F.name, F.id)
-    print "==========================================="
-    qs.wheres = qs.wheres & ((F.address__city_id == [111, 112]) | "address.city_id IS NULL")
-    print qs.select(F.user__name, F.address__street, "COUNT(*) AS count")
-    print "==========================================="
-
-    print
-    print "*******************************************"
-    print "**********      Union Query      **********"
-    print "*******************************************"
-    a = QS(T.item).where(F.status != -1).select_for_union("type, name, img")
-    b = QS(T.gift).where(F.storage > 0).select_for_union("type, name, img")
-    print (a + b).order_by("type", "name", desc=True).limit(100, 10).select()
-
-    print
-    print "*******************************************"
-    print "**********    Other Operation    **********"
-    print "*******************************************"
-    print QS(T.user).insert({
-        "name": "garfield",
-        "gender": "male",
-        "status": 0
-    }, ignore=True)
-    print "==========================================="
-    fl = ("name", "gender", "status", "age")
-    vl = (("garfield", "male", 0, 1), ("superwoman", "female", 0, 10))
-    print QS(T.user).insert_many(fl, vl, on_duplicate_key_update={"age" : E("age + VALUES(age)")})
-    print "==========================================="
-    print QS(T.user).where(F.id == 100).update({"name": "nobody", "status": 1}, ignore=True)
-    print "==========================================="
-    print QS(T.user).where(F.status == 1).delete()
+    # print
+    # print "*******************************************"
+    # print "**********  Step by Step Query   **********"
+    # print "*******************************************"
+    # t = T.grade
+    # print QS(t).limit(0,100).select(F.name)
+    # print "==========================================="
+    #
+    # t = (t * T.base).on(F.grade__item_type == F.base__type)
+    # print QS(t).order_by(F.grade__name, F.base__name, desc=True).select(F.grade__name, F.base__img)
+    # print "==========================================="
+    #
+    # t = (t + T.lottery).on(F.base__type == F.lottery__item_type)
+    # print QS(t).group_by(F.grade__grade).having(F.grade__grade > 0).select(F.grade__name, F.base__img, F.lottery__price)
+    # print "==========================================="
+    #
+    # w = (F.base__type == 1)
+    # print QS(t).where(w).select(F.grade__name, for_update=True)
+    # print "==========================================="
+    #
+    # w = w & (F.grade__status == [0,1])
+    # print QS(t).where(w).group_by(F.grade__name, F.base__img).count()
+    # print "==========================================="
+    #
+    # from datetime import datetime
+    # w = w | (F.lottery__add_time > "2009-01-01") & (F.lottery__add_time <= datetime.now())
+    # print QS(t).where(w).select_one(F.grade__name, F.base__img, F.lottery__price)
+    # print "==========================================="
+    #
+    # w = w & (F.base__status != [1, 2])
+    # print QS(t).where(w).select(F.grade__name, F.base__img, F.lottery__price, "CASE 1 WHEN 1")
+    #
+    #
+    # print
+    # print "*******************************************"
+    # print "**********  Step by Step Query2  **********"
+    # print "*******************************************"
+    # qs = QS(T.user)
+    # print qs.select(F.name)
+    # print "==========================================="
+    # qs.tables = (qs.tables * T.address).on(F.user__id == F.address__user_id)
+    # print qs.select(F.user__name, F.address__street)
+    # print "==========================================="
+    # qs.wheres = qs.wheres & (F.id == 1)
+    # print qs.select(F.name, F.id)
+    # print "==========================================="
+    # qs.wheres = qs.wheres & ((F.address__city_id == [111, 112]) | "address.city_id IS NULL")
+    # print qs.select(F.user__name, F.address__street, "COUNT(*) AS count")
+    # print "==========================================="
+    #
+    # print
+    # print "*******************************************"
+    # print "**********      Union Query      **********"
+    # print "*******************************************"
+    # a = QS(T.item).where(F.status != -1).select_for_union("type, name, img")
+    # b = QS(T.gift).where(F.storage > 0).select_for_union("type, name, img")
+    # print (a + b).order_by("type", "name", desc=True).limit(100, 10).select()
+    #
+    # print
+    # print "*******************************************"
+    # print "**********    Other Operation    **********"
+    # print "*******************************************"
+    # print QS(T.user).insert({
+    #     "name": "garfield",
+    #     "gender": "male",
+    #     "status": 0
+    # }, ignore=True)
+    # print "==========================================="
+    # fl = ("name", "gender", "status", "age")
+    # vl = (("garfield", "male", 0, 1), ("superwoman", "female", 0, 10))
+    # print QS(T.user).insert_many(fl, vl, on_duplicate_key_update={"age" : E("age + VALUES(age)")})
+    # print "==========================================="
+    # print QS(T.user).where(F.id == 100).update({"name": "nobody", "status": 1}, ignore=True)
+    # print "==========================================="
+    # print QS(T.user).where(F.status == 1).delete()
