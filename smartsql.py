@@ -39,8 +39,8 @@ class MetaTable(type):
         return cls(name, alias)
 
 
-class Table(object):
-    __metaclass__ = MetaTable
+class Table(object, metaclass=MetaTable):
+    # __metaclass__ = MetaTable
 
     def __init__(self, name, alias=None):
         self._name = name
@@ -133,8 +133,8 @@ class MetaField(type):
         return cls(name, prefix)
 
 
-class Field(object):
-    __metaclass__ = MetaField
+class Field(object, metaclass=MetaField):
+    # __metaclass__ = MetaField
 
     def __init__(self, name, prefix=None):
         self._name = name
@@ -806,13 +806,13 @@ if __name__ == "__main__":
     print("*******************************************")
     print("************   Single Query   *************")
     print("*******************************************")
-    # sql = QS((T.base + T.grade).on((F.base__type == F.grade__item_type) & (F.base__type == 1)) + T.lottery).on(
-    #     F.base__type == F.lottery__item_type
-    # ).where(
-    #     (F.name == "name") & (F.status == 0) | (F.name == None)
-    # ).group_by("base.type").having(F("count(*)") > 1).select(F.type, F.grade__grade, F.lottery__grade)
+    sql = QS((T.base + T.grade).on((F.base__type == F.grade__item_type) & (F.base__type == 1)) + T.lottery).on(
+        F.base__type == F.lottery__item_type
+    ).where(
+        (F.name == "name") & (F.status == 0) | (F.name == None)
+    ).group_by("base.type").having(F("count(*)") > 1).select(F.type, F.grade__grade, F.lottery__grade)
 
-    sql = QS(T('base') + T('grade')).on((F('base__type') == F('grade__item_type'))).select()
+    # sql = QS(T('base') + T('grade')).on((F('base__type') == F('grade__item_type'))).select()
 
     print(sql)
 
