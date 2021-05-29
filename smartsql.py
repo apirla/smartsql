@@ -828,6 +828,7 @@ def _OR(cond1, cond2):
 
 def dict2cond(di, opt=_AND, **cfg):
     rst_conds = ConditionSet()
+    ignore_none = True
     for key, val in di.items():
         if key in("$and", "$or"):
             if not isinstance(val, list):
@@ -836,13 +837,15 @@ def dict2cond(di, opt=_AND, **cfg):
             option = _AND if key == "$and" else _OR
             conds = ConditionSet()
             for cond in cond_list:
-                conds = option(conds, cond)
-            #todo maybe conds is empty
+                if not cond.empty:
+                    conds = option(conds, cond)
             rst_conds = opt(rst_conds, conds)
         elif isinstance(val, dict):
             ignore_none = val.get('$ignore_none') \
                 if val.get('$ignore_none', None) is not None else\
                 cfg.get('ignore_none', True)  # 默认忽略None值，适应动态sql场景
+            if '$ignore_none' in val.keys():
+                val.pop('$ignore_none')
             # key is field name
             field_names = [quote(_) for _ in key.split('.')]
             field_name = ".".join(field_names)
@@ -867,9 +870,10 @@ def dict2cond(di, opt=_AND, **cfg):
                     conds &= (field != v)
             if not ignore:
                 rst_conds = opt(rst_conds, conds)
+        elif key == "$ignore_none":
+            ignore_none = val
         else:
-            if cfg.get('ignore_none', True) and val is None:
-                print(val,'is None')
+            if cfg.get('ignore_none', True) and val is None and ignore_none:
                 continue
             field_names = [quote(_) for _ in key.split('.')]
             field_name = ".".join(field_names)
