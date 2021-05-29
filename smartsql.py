@@ -15,7 +15,9 @@ __all__ = ["QS", "T", "F", "E"]
 def apply_v3(fuc, params=[]):
     return fuc(*params)
 
+
 apply = apply_v3
+
 
 class Error(Exception):
     pass
@@ -134,7 +136,6 @@ class MetaField(type):
 
 
 class Field(object, metaclass=MetaField):
-    # __metaclass__ = MetaField
 
     def __init__(self, name, prefix=None):
         self._name = name
@@ -521,7 +522,16 @@ class QuerySet(object):
         return self
 
     def where(self, c):
-        self._wheres = c
+        if isinstance(c, ConditionSet) or isinstance(c, Condition):
+            self._wheres = c
+        elif isinstance(c, list) or isinstance(c, set):
+            if len(c) == 0:
+                return self
+            self._wheres = list2cond(c)
+        elif isinstance(c, dict):
+            if not bool(c):
+                return self
+            self._wheres = dict2cond(c)
         return self
 
     def group_by(self, *f_list):
@@ -797,6 +807,70 @@ class UnionQuerySet(object):
         return sql, params
 
 
+def list2cond(li):
+    conds = ConditionSet()
+    for cond in li:
+        conds &= cond
+    return conds
+
+
+def _AND(cond1, cond2):
+    return cond1 & cond2
+
+def _OR(cond1, cond2):
+    return cond1 | cond2
+
+def dict2cond(di, opt=_AND, **cfg):
+    rst_conds = ConditionSet()
+    for key, val in di.items():
+        if key in("$and", "$or"):
+            if not isinstance(val, list):
+                raise Error("{key} option must deal with list but not {type}".format(key=key, type=str(type(val))))
+            cond_list = [dict2cond(item) for item in val]
+            option = _AND if key == "$and" else _OR
+            conds = ConditionSet()
+            for cond in cond_list:
+                conds = option(conds, cond)
+            #todo maybe conds is empty
+            rst_conds = opt(rst_conds, conds)
+        elif isinstance(val, dict):
+            ignore_none = val.get('$ignore_none') \
+                if val.get('$ignore_none', None) is not None else\
+                cfg.get('ignore_none', True)  # 默认忽略None值，适应动态sql场景
+            # key is field name
+            field_name = key.replace('.', '__')
+            field = F(field_name)
+            conds = ConditionSet()
+            ignore = False
+            for k, v in val.items():
+                if ignore_none and v is None:
+                    ignore = True
+                    break
+                if k == "$gt":
+                    conds &= (field > v)
+                elif k == "$gte" or k == "$ge":
+                    conds &= (field >= v)
+                elif k == "$lt":
+                    conds &= (field < v)
+                elif k in ("$lte","$le"):
+                    conds &= (field <= v)
+                elif k in ("$eq", "$in"):
+                    conds &= (field == v)
+                elif k in ("$ne","$nin"):
+                    conds &= (field != v)
+            if not ignore:
+                rst_conds = opt(rst_conds, conds)
+        else:
+            if cfg.get('ignore_none', True) and val is None:
+                print(val,'is None')
+                continue
+            field_name = key.replace('.', '__')
+            field = F(field_name)
+            rst_conds = opt(rst_conds, field == val)
+
+    return rst_conds
+
+
 ############## alias ###############
 
 QS, T, F, E = QuerySet, Table, Field, Expr
@@ -806,15 +880,36 @@ if __name__ == "__main__":
     print("*******************************************")
     print("************   Single Query   *************")
     print("*******************************************")
-    sql = QS((T.base + T.grade).on((F.base__type == F.grade__item_type) & (F.base__type == 1)) + T.lottery).on(
+    qs = QS((T.base + T.grade).on((F.base__type == F.grade__item_type) & (F.base__type == 1)) + T.lottery).on(
         F.base__type == F.lottery__item_type
     ).where(
-        (F.name == "name") & (F.status == 0) | (F.name == None)
-    ).group_by("base.type").having(F("count(*)") > 1).select(F.type, F.grade__grade, F.lottery__grade)
-
+        [F.name == "name", F.status == 0, F.name == None]
+    ).group_by("base.type").having(F("count(*)") > 1)
+    # print(qs.wheres.sql)
+    # sql = qs.select(F.type, F.grade__grade, F.lottery__grade)
     # sql = QS(T('base') + T('grade')).on((F('base__type') == F('grade__item_type'))).select()
 
-    print(sql)
+    cond_dict = {
+        'id': 1,
+        'email': {
+            '$eq': '123456789@qq.com',
+            '$ne': 'aadasdad'
+        },
+        'age': {
+            '$gt': 18,
+            '$lte': None
+        },
+        '$or': [
+            {'money': {'$gt': 100000}},
+            {
+                'is_beauty': 1
+            }
+        ],
+        'is_bad_girl': {'$ne': 1}
+    }
+    print(
+        QS(T.user).where(cond_dict).select()
+    )
 
     # print
     # print "*******************************************"
