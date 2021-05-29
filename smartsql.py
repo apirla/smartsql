@@ -155,7 +155,7 @@ class Field(object, metaclass=MetaField):
             if len(f) < 1:
                 return Condition("FALSE")
 
-            sql = ", ".join(["%s" for i in xrange(len(f))])
+            sql = ", ".join(["%s" for i in range(len(f))])
             return Condition("%s IN (%s)" % (self.sql, sql), list(f))
 
         return Condition(self.sql + " = %s", [f])
@@ -174,7 +174,7 @@ class Field(object, metaclass=MetaField):
             if len(f) < 1:
                 return Condition("TRUE")
 
-            sql = ", ".join(["%s" for i in xrange(len(f))])
+            sql = ", ".join(["%s" for i in range(len(f))])
             return Condition("%s NOT IN (%s)" % (self.sql, sql), list(f))
 
         return Condition(self.sql + " <> %s", [f])
@@ -383,6 +383,10 @@ class ConditionSet(object):
     def params(self):
         return [] if self._empty else self._params
 
+    @property
+    def empty(self):
+        return self._empty
+
 
 ################################################
 
@@ -522,16 +526,18 @@ class QuerySet(object):
         return self
 
     def where(self, c):
-        if isinstance(c, ConditionSet) or isinstance(c, Condition):
+        if isinstance(c, Condition):
             self._wheres = c
+        elif isinstance(c, ConditionSet):
+            self._wheres = None if c.empty else c
         elif isinstance(c, list) or isinstance(c, set):
             if len(c) == 0:
                 return self
-            self._wheres = list2cond(c)
+            self.where(list2cond(c))
         elif isinstance(c, dict):
             if not bool(c):
                 return self
-            self._wheres = dict2cond(c)
+            self.where(dict2cond(c))
         return self
 
     def group_by(self, *f_list):
@@ -838,7 +844,8 @@ def dict2cond(di, opt=_AND, **cfg):
                 if val.get('$ignore_none', None) is not None else\
                 cfg.get('ignore_none', True)  # 默认忽略None值，适应动态sql场景
             # key is field name
-            field_name = key.replace('.', '__')
+            field_names = [quote(_) for _ in key.split('.')]
+            field_name = ".".join(field_names)
             field = F(field_name)
             conds = ConditionSet()
             ignore = False
@@ -864,10 +871,10 @@ def dict2cond(di, opt=_AND, **cfg):
             if cfg.get('ignore_none', True) and val is None:
                 print(val,'is None')
                 continue
-            field_name = key.replace('.', '__')
+            field_names = [quote(_) for _ in key.split('.')]
+            field_name = ".".join(field_names)
             field = F(field_name)
             rst_conds = opt(rst_conds, field == val)
-
     return rst_conds
 
 
